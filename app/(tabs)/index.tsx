@@ -1,98 +1,213 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { AlarmCard } from "@/components/AlarmCard";
+import { Colors } from "@/constants/colors";
+import { Alarm } from "@/constants/types";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
+import {
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+// Mock data
+const MOCK_ALARMS: Alarm[] = [
+  {
+    id: "1",
+    time: new Date(2026, 1, 20, 7, 0),
+    enabled: true,
+    repeatDays: [1, 2, 3, 4, 5],
+    theme: "Math",
+    difficulty: "Medium",
+    mode: "Dismiss",
+    label: "Morning Alarm",
+  },
+  {
+    id: "2",
+    time: new Date(2026, 1, 20, 14, 30),
+    enabled: false,
+    repeatDays: [0, 6],
+    theme: "English",
+    difficulty: "Easy",
+    mode: "Snooze",
+    label: "Afternoon Nap",
+  },
+  {
+    id: "3",
+    time: new Date(2026, 1, 20, 22, 0),
+    enabled: true,
+    repeatDays: [0, 1, 2, 3, 4, 5, 6],
+    theme: "Logic",
+    difficulty: "Hard",
+    mode: "Dismiss",
+    label: "Bedtime Reminder",
+  },
+];
 
-export default function HomeScreen() {
+export default function AlarmsScreen() {
+  const [alarms, setAlarms] = useState<Alarm[]>(MOCK_ALARMS);
+  const router = useRouter();
+
+  const handleToggle = (id: string) => {
+    setAlarms((prev) =>
+      prev.map((alarm) =>
+        alarm.id === id ? { ...alarm, enabled: !alarm.enabled } : alarm,
+      ),
+    );
+  };
+
+  const handleDelete = (id: string) => {
+    Alert.alert("Delete Alarm", "Are you sure you want to delete this alarm?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () =>
+          setAlarms((prev) => prev.filter((alarm) => alarm.id !== id)),
+      },
+    ]);
+  };
+
+  const handleEdit = (id: string) => {
+    router.push({
+      pathname: "/create-alarm",
+      params: { alarmId: id },
+    });
+  };
+
+  const handleAddAlarm = () => {
+    router.push("/create-alarm");
+  };
+
+  const handleTestRinging = () => {
+    router.push({
+      pathname: "/ringing",
+      params: {
+        theme: "Math",
+        difficulty: "Medium",
+        mode: "Dismiss",
+      },
+    });
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>My Alarms</Text>
+        <TouchableOpacity style={styles.testButton} onPress={handleTestRinging}>
+          <Text style={styles.testButtonText}>Test 🔔</Text>
+        </TouchableOpacity>
+      </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      {alarms.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>⏰</Text>
+          <Text style={styles.emptyText}>No alarms yet</Text>
+          <Text style={styles.emptySubtext}>
+            Tap the + button to create your first alarm
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={alarms}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <AlarmCard
+              alarm={item}
+              onToggle={handleToggle}
+              onDelete={handleDelete}
+              onEdit={handleEdit}
+            />
+          )}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+
+      <TouchableOpacity style={styles.addButton} onPress={handleAddAlarm}>
+        <Text style={styles.addButtonText}>+</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
   },
-  stepContainer: {
-    gap: 8,
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 60,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    backgroundColor: Colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: Colors.text,
+  },
+  testButton: {
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  testButtonText: {
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  listContent: {
+    padding: 20,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 40,
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: Colors.text,
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  emptySubtext: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: "center",
+  },
+  addButton: {
+    position: "absolute",
+    right: 20,
+    bottom: 30,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.primaryLight,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: Colors.primaryLight,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  addButtonText: {
+    fontSize: 32,
+    color: Colors.white,
+    fontWeight: "300",
   },
 });
