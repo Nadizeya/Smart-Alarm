@@ -1,15 +1,14 @@
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/hooks/useAuth";
-import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TouchableOpacity,
-  View,
+    Alert,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 interface SettingItem {
@@ -23,7 +22,6 @@ interface SettingItem {
 }
 
 export default function SettingsScreen() {
-  const router = useRouter();
   const { logout } = useAuth();
   const [notifications, setNotifications] = useState(true);
   const [vibration, setVibration] = useState(true);
@@ -36,10 +34,9 @@ export default function SettingsScreen() {
       {
         text: "Logout",
         style: "destructive",
-        onPress: async () => {
-          await logout();
-          router.replace("/login" as any);
-        },
+        // AuthGuard in _layout.tsx detects isAuthenticated → false and
+        // redirects to /login automatically. No manual navigation needed.
+        onPress: () => logout(),
       },
     ]);
   };

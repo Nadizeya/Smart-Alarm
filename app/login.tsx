@@ -1,35 +1,27 @@
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/hooks/useAuth";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
-  const { login, isAuthenticated, checkAuth } = useAuth();
+  const { login, isLoading } = useAuth();
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.replace("/(tabs)" as any);
-    }
-  }, [isAuthenticated]);
+  // While Firebase is resolving auth state, show nothing —
+  // AuthGuard in _layout.tsx will redirect automatically if already signed in.
+  if (isLoading) return null;
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -41,13 +33,10 @@ export default function LoginScreen() {
     const success = await login(email, password);
     setLoading(false);
 
-    if (success) {
-      router.replace("/(tabs)" as any);
-    } else {
-      Alert.alert(
-        "Login Failed",
-        "Invalid credentials. Try:\nEmail: user@smartalarm.com\nPassword: password123",
-      );
+    // On success, AuthGuard detects isAuthenticated → true and navigates to /(tabs).
+    // No manual router.replace needed here.
+    if (!success) {
+      Alert.alert("Login Failed", "Invalid email or password. Please try again.");
     }
   };
 
@@ -107,13 +96,6 @@ export default function LoginScreen() {
               <Text style={styles.loginButtonText}>Sign In</Text>
             )}
           </TouchableOpacity>
-
-          {/* Demo Credentials */}
-          <View style={styles.demoContainer}>
-            <Text style={styles.demoTitle}>Demo Credentials:</Text>
-            <Text style={styles.demoText}>Email: user@smartalarm.com</Text>
-            <Text style={styles.demoText}>Password: password123</Text>
-          </View>
         </View>
 
         {/* Footer */}
@@ -191,25 +173,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: Colors.white,
-  },
-  demoContainer: {
-    marginTop: 32,
-    padding: 16,
-    backgroundColor: Colors.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  demoTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.text,
-    marginBottom: 8,
-  },
-  demoText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginVertical: 2,
   },
   footer: {
     marginTop: 40,
