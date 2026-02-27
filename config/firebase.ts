@@ -2,16 +2,16 @@ import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// Your Firebase project config — replace values with your actual project's config
-// from Firebase Console → Project Settings → Your apps → SDK setup and configuration
+// Credentials are loaded from .env (never commit that file).
+// See .env.example for the required variable names.
 const firebaseConfig = {
-  apiKey: "AIzaSyB6voDFbr6zdeA44PwsctjzStYHVZwGTXA",
-  authDomain: "smart-alarm-bef73.firebaseapp.com",
-  projectId: "smart-alarm-bef73",
-  storageBucket: "smart-alarm-bef73.firebasestorage.app",
-  messagingSenderId: "489494477879",
-  appId: "1:489494477879:web:48e52495e64a0963d5d3b2",
-  measurementId: "G-ZQ3DYMEB0Z"
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 // Prevent re-initialization on hot reload
