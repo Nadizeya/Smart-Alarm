@@ -1,61 +1,25 @@
 import { AlarmCard } from "@/components/AlarmCard";
 import { Colors } from "@/constants/colors";
-import { Alarm } from "@/constants/types";
+import { useAlarms } from "@/hooks/useAlarms";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React from "react";
 import {
-  Alert,
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
-// Mock data
-const MOCK_ALARMS: Alarm[] = [
-  {
-    id: "1",
-    time: new Date(2026, 1, 20, 7, 0),
-    enabled: true,
-    repeatDays: [1, 2, 3, 4, 5],
-    theme: "Math",
-    difficulty: "Medium",
-    mode: "Dismiss",
-    label: "Morning Alarm",
-  },
-  {
-    id: "2",
-    time: new Date(2026, 1, 20, 14, 30),
-    enabled: false,
-    repeatDays: [0, 6],
-    theme: "English",
-    difficulty: "Easy",
-    mode: "Snooze",
-    label: "Afternoon Nap",
-  },
-  {
-    id: "3",
-    time: new Date(2026, 1, 20, 22, 0),
-    enabled: true,
-    repeatDays: [0, 1, 2, 3, 4, 5, 6],
-    theme: "Logic",
-    difficulty: "Hard",
-    mode: "Dismiss",
-    label: "Bedtime Reminder",
-  },
-];
-
 export default function AlarmsScreen() {
-  const [alarms, setAlarms] = useState<Alarm[]>(MOCK_ALARMS);
+  const { alarms, loading, toggleAlarm, deleteAlarm } = useAlarms();
   const router = useRouter();
 
   const handleToggle = (id: string) => {
-    setAlarms((prev) =>
-      prev.map((alarm) =>
-        alarm.id === id ? { ...alarm, enabled: !alarm.enabled } : alarm,
-      ),
-    );
+    const alarm = alarms.find((a) => a.id === id);
+    if (alarm) toggleAlarm(id, !alarm.enabled);
   };
 
   const handleDelete = (id: string) => {
@@ -64,8 +28,7 @@ export default function AlarmsScreen() {
       {
         text: "Delete",
         style: "destructive",
-        onPress: () =>
-          setAlarms((prev) => prev.filter((alarm) => alarm.id !== id)),
+        onPress: () => deleteAlarm(id),
       },
     ]);
   };
@@ -91,6 +54,14 @@ export default function AlarmsScreen() {
       },
     });
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={Colors.primaryLight} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -183,6 +154,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: Colors.text,
     marginBottom: 8,
+  },
+  centered: {
+    justifyContent: "center",
+    alignItems: "center",
   },
   emptySubtext: {
     fontSize: 14,

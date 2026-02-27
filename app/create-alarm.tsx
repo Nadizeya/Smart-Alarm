@@ -2,16 +2,19 @@ import { DifficultySelector } from "@/components/DifficultySelector";
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { Colors } from "@/constants/colors";
 import { AlarmMode, AlarmTheme, DifficultyLevel } from "@/constants/types";
+import { useAlarms } from "@/hooks/useAlarms";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -20,6 +23,7 @@ export default function CreateAlarmScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const isEdit = !!params.alarmId;
+  const { addAlarm } = useAlarms();
 
   const [time, setTime] = useState(new Date());
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -27,6 +31,7 @@ export default function CreateAlarmScreen() {
   const [theme, setTheme] = useState<AlarmTheme>("Math");
   const [difficulty, setDifficulty] = useState<DifficultyLevel>("Medium");
   const [mode, setMode] = useState<AlarmMode>("Dismiss");
+  const [saving, setSaving] = useState(false);
 
   const handleDayToggle = (dayIndex: number) => {
     setSelectedDays((prev) =>
@@ -36,16 +41,24 @@ export default function CreateAlarmScreen() {
     );
   };
 
-  const handleSave = () => {
-    // In a real app, this would save to state management or storage
-    console.log("Saving alarm:", {
-      time,
-      selectedDays,
-      theme,
-      difficulty,
-      mode,
-    });
-    router.back();
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await addAlarm({
+        time,
+        enabled: true,
+        repeatDays: selectedDays,
+        theme,
+        difficulty,
+        mode,
+        label: "",
+      });
+      router.back();
+    } catch (e) {
+      Alert.alert("Error", "Failed to save alarm. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleTimeChange = (event: any, selectedDate?: Date) => {
@@ -66,14 +79,18 @@ export default function CreateAlarmScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} disabled={saving}>
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
           {isEdit ? "Edit Alarm" : "New Alarm"}
         </Text>
-        <TouchableOpacity onPress={handleSave}>
-          <Text style={styles.saveText}>Save</Text>
+        <TouchableOpacity onPress={handleSave} disabled={saving}>
+          {saving ? (
+            <ActivityIndicator size="small" color={Colors.primaryLight} />
+          ) : (
+            <Text style={styles.saveText}>Save</Text>
+          )}
         </TouchableOpacity>
       </View>
 

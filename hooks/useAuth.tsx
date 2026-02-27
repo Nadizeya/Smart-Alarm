@@ -1,53 +1,74 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createContext, ReactNode, useContext, useState } from "react";
+import { auth } from "@/config/firebase";
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  User,
+} from "firebase/auth";
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
+  user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  /** @deprecated Firebase manages session automatically. This is a no-op kept for API compatibility. */
   checkAuth: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const MOCK_EMAIL = process.env.EXPO_PUBLIC_MOCK_EMAIL || "user@smartalarm.com";
-const MOCK_PASSWORD = process.env.EXPO_PUBLIC_MOCK_PASSWORD || "password123";
-const AUTH_KEY = "@smart_alarm_auth";
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const checkAuth = async () => {
-    try {
-      const authStatus = await AsyncStorage.getItem(AUTH_KEY);
-      setIsAuthenticated(authStatus === "true");
-    } catch (error) {
-      console.error("Error checking auth:", error);
-    } finally {
+  // Firebase automatically restores session from AsyncStorage persistence
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
       setIsLoading(false);
-    }
-  };
+    });
+    return unsubscribe;
+  }, []);
+
+  /** No-op — kept so existing screens that call checkAuth() don't break. */
+  const checkAuth = async () => {};
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    // Mock authentication
-    if (email === MOCK_EMAIL && password === MOCK_PASSWORD) {
-      await AsyncStorage.setItem(AUTH_KEY, "true");
-      setIsAuthenticated(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
       return true;
+    } catch (error) {
+      console.error("Firebase login error:", error);
+      return false;
     }
-    return false;
   };
 
   const logout = async () => {
-    await AsyncStorage.removeItem(AUTH_KEY);
-    setIsAuthenticated(false);
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Firebase logout error:", error);
+    }
   };
 
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated, isLoading, login, logout, checkAuth }}
+      value={{
+        isAuthenticated: user !== null,
+        isLoading,
+        user,
+        login,
+        logout,
+        checkAuth,
+      }}
     >
       {children}
     </AuthContext.Provider>
