@@ -1,7 +1,7 @@
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -14,40 +14,40 @@ import {
   View,
 } from "react-native";
 
-export default function LoginScreen() {
+export default function SignUpScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { login, isAuthenticated, checkAuth } = useAuth();
+  const { signUp } = useAuth();
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.replace("/(tabs)" as any);
+  const handleSignUp = async () => {
+    if (!email || !password || !confirmPassword) {
+      Alert.alert("Error", "Please fill in all fields");
+      return;
     }
-  }, [isAuthenticated]);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Please enter both email and password");
+    if (password !== confirmPassword) {
+      Alert.alert("Error", "Passwords do not match");
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert("Error", "Password should be at least 6 characters");
       return;
     }
 
     setLoading(true);
-    const { success, error } = await login(email, password);
+    const { success, error } = await signUp(email, password);
     setLoading(false);
 
     if (success) {
+      // Assuming signUp also automatically logs in, we can route to tabs.
+      // If it doesn't, we can route to login.
       router.replace("/(tabs)" as any);
     } else {
-      Alert.alert(
-        "Login Failed",
-        error || "Invalid email or password. Please try again.",
-      );
+      Alert.alert("Sign Up Failed", error || "An unexpected error occurred. Please try again.");
     }
   };
 
@@ -57,20 +57,20 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.content}>
-        {/* Logo/Title */}
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.icon}>⏰</Text>
-          <Text style={styles.title}>Smart Alarm</Text>
-          <Text style={styles.subtitle}>Wake up smarter every day</Text>
+          <Text style={styles.icon}>👋</Text>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Join Smart Alarm today</Text>
         </View>
 
-        {/* Login Form */}
+        {/* Sign Up Form */}
         <View style={styles.form}>
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Email</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your email"
+              placeholder="user@example.com"
               placeholderTextColor={Colors.textSecondary}
               value={email}
               onChangeText={setEmail}
@@ -84,43 +84,54 @@ export default function LoginScreen() {
             <Text style={styles.label}>Password</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your password"
+              placeholder="Create a password"
               placeholderTextColor={Colors.textSecondary}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
-              onSubmitEditing={handleLogin}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Confirm Password</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Confirm your password"
+              placeholderTextColor={Colors.textSecondary}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              onSubmitEditing={handleSignUp}
             />
           </View>
 
           <TouchableOpacity
-            style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-            onPress={handleLogin}
+            style={[styles.signupButton, loading && styles.signupButtonDisabled]}
+            onPress={handleSignUp}
             disabled={loading}
             activeOpacity={0.8}
           >
             {loading ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <Text style={styles.loginButtonText}>Sign In</Text>
+              <Text style={styles.signupButtonText}>Sign Up</Text>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.signupLink}
-            onPress={() => router.push("/signup" as any)}
+            style={styles.loginLink}
+            onPress={() => router.back()}
             disabled={loading}
           >
-            <Text style={styles.signupLinkText}>
-              Don't have an account? <Text style={styles.signupLinkTextBold}>Sign Up</Text>
+            <Text style={styles.loginLinkText}>
+              Already have an account? <Text style={styles.loginLinkTextBold}>Sign In</Text>
             </Text>
           </TouchableOpacity>
         </View>
-
-        {/* Footer */}
-        <Text style={styles.footer}>Challenge your brain to wake up</Text>
       </View>
     </KeyboardAvoidingView>
   );
@@ -138,14 +149,14 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center",
-    marginBottom: 48,
+    marginBottom: 40,
   },
   icon: {
-    fontSize: 80,
+    fontSize: 60,
     marginBottom: 16,
   },
   title: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: "700",
     color: Colors.text,
     marginBottom: 8,
@@ -158,7 +169,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   label: {
     fontSize: 14,
@@ -175,43 +186,37 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  loginButton: {
+  signupButton: {
     backgroundColor: Colors.primaryLight,
     borderRadius: 12,
     padding: 18,
     alignItems: "center",
-    marginTop: 12,
+    marginTop: 20,
     shadowColor: Colors.primaryLight,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
   },
-  loginButtonDisabled: {
+  signupButtonDisabled: {
     opacity: 0.6,
   },
-  loginButtonText: {
+  signupButtonText: {
     fontSize: 18,
     fontWeight: "700",
     color: Colors.white,
   },
-  signupLink: {
+  loginLink: {
     marginTop: 24,
     alignItems: "center",
     padding: 8,
   },
-  signupLinkText: {
+  loginLinkText: {
     fontSize: 15,
     color: Colors.textSecondary,
   },
-  signupLinkTextBold: {
+  loginLinkTextBold: {
     fontWeight: "700",
     color: Colors.primaryLight,
-  },
-  footer: {
-    marginTop: 40,
-    fontSize: 14,
-    color: Colors.textSecondary,
-    textAlign: "center",
   },
 });
