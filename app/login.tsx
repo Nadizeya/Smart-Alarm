@@ -1,7 +1,6 @@
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/hooks/useAuth";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,18 +17,11 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
-  const { login, isAuthenticated, checkAuth } = useAuth();
+  const { login, isLoading } = useAuth();
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.replace("/(tabs)" as any);
-    }
-  }, [isAuthenticated]);
+  // While Firebase is resolving auth state, show nothing —
+  // AuthGuard in _layout.tsx will redirect automatically if already signed in.
+  if (isLoading) return null;
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -38,16 +30,11 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
-    const { success, error } = await login(email, password);
-    setLoading(false);
+    const success = await login(email, password);
+    setLoading(success);
 
-    if (success) {
-      router.replace("/(tabs)" as any);
-    } else {
-      Alert.alert(
-        "Login Failed",
-        error || "Invalid email or password. Please try again.",
-      );
+    if (!success) {
+      Alert.alert("Login Failed", "Invalid email or password. Please try again.");
     }
   };
 
@@ -106,16 +93,6 @@ export default function LoginScreen() {
             ) : (
               <Text style={styles.loginButtonText}>Sign In</Text>
             )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.signupLink}
-            onPress={() => router.push("/signup" as any)}
-            disabled={loading}
-          >
-            <Text style={styles.signupLinkText}>
-              Don't have an account? <Text style={styles.signupLinkTextBold}>Sign Up</Text>
-            </Text>
           </TouchableOpacity>
         </View>
 
@@ -194,19 +171,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: Colors.white,
-  },
-  signupLink: {
-    marginTop: 24,
-    alignItems: "center",
-    padding: 8,
-  },
-  signupLinkText: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-  },
-  signupLinkTextBold: {
-    fontWeight: "700",
-    color: Colors.primaryLight,
   },
   footer: {
     marginTop: 40,
