@@ -1,108 +1,102 @@
-import { auth, db } from "@/config/firebase";
-import { Alarm } from "@/constants/types";
-import {
-    addDoc,
-    collection,
-    deleteDoc,
-    doc,
-    onSnapshot,
-    orderBy,
-    query,
-    serverTimestamp,
-    Timestamp,
-    updateDoc,
-} from "firebase/firestore";
+/**
+ * useAlarms.ts
+ * ------------
+ * React hook that provides per-user alarm state backed by AsyncStorage.
+ *
+ * Relies on useAuth() for the current user's uid so it always has the correct
+ * uid even while Firebase Auth is still restoring its session on native.
+ */
+
 import { useEffect, useState } from "react";
-
-// Firestore stores times as Timestamps — convert back to Date for the app
-function docToAlarm(id: string, data: Record<string, any>): Alarm {
-  return {
-    id,
-    time: data.time instanceof Timestamp ? data.time.toDate() : new Date(data.time),
-    enabled: data.enabled ?? true,
-    repeatDays: data.repeatDays ?? [],
-    theme: data.theme,
-    difficulty: data.difficulty,
-    mode: data.mode,
-    label: data.label ?? "",
-  };
-}
-
-function alarmsRef() {
-  const uid = auth.currentUser?.uid;
-  if (!uid) throw new Error("Not authenticated");
-  return collection(db, "users", uid, "alarms");
-}
-
-// ─── Hook ────────────────────────────────────────────────────────────────────
+import { useAuth } from "@/hooks/useAuth";
+import {
+  loadAlarms,
+  saveAlarms,
+  addAlarm as storageAddAlarm,
+  deleteAlarm as storageDeleteAlarm,
+} from "@/utils/alarmStorage";
+import { Alarm } from "@/constants/types";
 
 export function useAlarms() {
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const uid = auth.currentUser?.uid;
+  // ── Fetch helper (reusable) ──────────────────────────────────────────────────
+  const refreshAlarms = async () => {
     if (!uid) {
+      setAlarms([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await loadAlarms(uid);
+      setAlarms(data);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Load alarms whenever the signed-in user changes ─────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!uid) {
+      setAlarms([]);
       setLoading(false);
       return;
     }
 
-    const q = query(
-      collection(db, "users", uid, "alarms"),
-      orderBy("createdAt", "desc"),
-    );
+    setLoading(true);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const loaded = snapshot.docs.map((d) => docToAlarm(d.id, d.data()));
-      setAlarms(loaded);
-      setLoading(false);
+    loadAlarms(uid).then((data) => {
+      if (!cancelled) {
+        setAlarms(data);
+        setLoading(false);
+      }
     });
 
-    return unsubscribe;
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [uid]);
 
-  // Add a new alarm
+  // ── Mutations ────────────────────────────────────────────────────────────────
+
   const addAlarm = async (alarm: Omit<Alarm, "id">) => {
-    await addDoc(alarmsRef(), {
-      time: Timestamp.fromDate(alarm.time),
-      enabled: alarm.enabled,
-      repeatDays: alarm.repeatDays,
-      theme: alarm.theme,
-      difficulty: alarm.difficulty,
-      mode: alarm.mode,
-      label: alarm.label ?? "",
-      createdAt: serverTimestamp(),
-    });
+    if (!uid) throw new Error("No authenticated user");
+
+    const updated = await storageAddAlarm(uid, alarm);
+    setAlarms(updated);
   };
 
-  // Toggle enabled/disabled
   const toggleAlarm = async (id: string, enabled: boolean) => {
-    const uid = auth.currentUser?.uid;
     if (!uid) return;
-    await updateDoc(doc(db, "users", uid, "alarms", id), { enabled });
+
+    const updated = alarms.map((a) => (a.id === id ? { ...a, enabled } : a));
+    await saveAlarms(uid, updated);
+    setAlarms(updated);
   };
 
-  // Delete an alarm
   const deleteAlarm = async (id: string) => {
-    const uid = auth.currentUser?.uid;
     if (!uid) return;
-    await deleteDoc(doc(db, "users", uid, "alarms", id));
+
+    const updated = await storageDeleteAlarm(uid, id);
+    setAlarms(updated);
   };
 
-  // Update an existing alarm
-  const updateAlarm = async (id: string, alarm: Omit<Alarm, "id">) => {
-    const uid = auth.currentUser?.uid;
+  const updateAlarm = async (id: string, updatedData: Omit<Alarm, "id">) => {
     if (!uid) return;
-    await updateDoc(doc(db, "users", uid, "alarms", id), {
-      time: Timestamp.fromDate(alarm.time),
-      enabled: alarm.enabled,
-      repeatDays: alarm.repeatDays,
-      theme: alarm.theme,
-      difficulty: alarm.difficulty,
-      mode: alarm.mode,
-      label: alarm.label ?? "",
-    });
+
+    const updated = alarms.map((a) =>
+      a.id === id ? { ...updatedData, id } : a
+    );
+    await saveAlarms(uid, updated);
+    setAlarms(updated);
   };
 
-  return { alarms, loading, addAlarm, toggleAlarm, deleteAlarm, updateAlarm };
+  return { alarms, loading, addAlarm, toggleAlarm, deleteAlarm, updateAlarm, refreshAlarms };
 }

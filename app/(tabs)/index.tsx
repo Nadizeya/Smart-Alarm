@@ -1,8 +1,8 @@
 import { AlarmCard } from "@/components/AlarmCard";
 import { Colors } from "@/constants/colors";
 import { useAlarms } from "@/hooks/useAlarms";
-import { useRouter } from "expo-router";
-import React from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -14,8 +14,16 @@ import {
 } from "react-native";
 
 export default function AlarmsScreen() {
-  const { alarms, loading, toggleAlarm, deleteAlarm } = useAlarms();
+  const { alarms, loading, toggleAlarm, deleteAlarm, refreshAlarms } = useAlarms();
   const router = useRouter();
+
+  // Reload alarms from AsyncStorage every time this screen comes into focus.
+  // This ensures newly created alarms appear immediately after navigating back.
+  useFocusEffect(
+    useCallback(() => {
+      refreshAlarms();
+    }, [])
+  );
 
   const handleToggle = (id: string) => {
     const alarm = alarms.find((a) => a.id === id);
