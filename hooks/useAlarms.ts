@@ -1,10 +1,11 @@
 /**
  * useAlarms.ts
  * ------------
- * React hook that provides per-user alarm state backed by AsyncStorage.
+ * React hook that manages per-user alarm state (AsyncStorage) AND wires each
+ * alarm to an OS-level local notification via expo-notifications.
  *
- * Relies on useAuth() for the current user's uid so it always has the correct
- * uid even while Firebase Auth is still restoring its session on native.
+ * When an alarm is created/enabled  → scheduleAlarmNotification()
+ * When an alarm is deleted/disabled → cancelAlarmNotification()
  */
 
 import { useEffect, useState } from "react";
@@ -15,6 +16,11 @@ import {
   addAlarm as storageAddAlarm,
   deleteAlarm as storageDeleteAlarm,
 } from "@/utils/alarmStorage";
+import {
+  scheduleAlarmNotification,
+  cancelAlarmNotification,
+  requestNotificationPermission,
+} from "@/utils/alarmScheduler";
 import { Alarm } from "@/constants/types";
 
 export function useAlarms() {
@@ -23,6 +29,13 @@ export function useAlarms() {
 
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // ── Request notification permission once when a user is present ──────────────
+  useEffect(() => {
+    if (uid) {
+      requestNotificationPermission();
+    }
+  }, [uid]);
 
   // ── Fetch helper (reusable) ──────────────────────────────────────────────────
   const refreshAlarms = async () => {
@@ -69,20 +82,64 @@ export function useAlarms() {
   const addAlarm = async (alarm: Omit<Alarm, "id">) => {
     if (!uid) throw new Error("No authenticated user");
 
+    // 1. Persist first so the alarm gets an id
     const updated = await storageAddAlarm(uid, alarm);
+    const newAlarm = updated[0]; // storageAddAlarm prepends
+
+    // 2. Schedule OS notification if enabled
+    if (newAlarm.enabled) {
+      try {
+        const notificationIds = await scheduleAlarmNotification(newAlarm);
+        newAlarm.notificationIds = notificationIds;
+
+        // Save the notificationIds back to storage
+        await saveAlarms(uid, updated);
+      } catch (e) {
+        console.warn("[useAlarms] Failed to schedule notification:", e);
+      }
+    }
+
     setAlarms(updated);
   };
 
   const toggleAlarm = async (id: string, enabled: boolean) => {
     if (!uid) return;
 
-    const updated = alarms.map((a) => (a.id === id ? { ...a, enabled } : a));
+    const alarm = alarms.find((a) => a.id === id);
+    if (!alarm) return;
+
+    // Cancel old notifications regardless
+    if (alarm.notificationIds?.length) {
+      await cancelAlarmNotification(alarm.notificationIds);
+    }
+
+    let notificationIds: string[] = [];
+
+    // Schedule new notifications if turning ON
+    if (enabled) {
+      try {
+        notificationIds = await scheduleAlarmNotification({ ...alarm, enabled });
+      } catch (e) {
+        console.warn("[useAlarms] Failed to schedule notification:", e);
+      }
+    }
+
+    const updated = alarms.map((a) =>
+      a.id === id ? { ...a, enabled, notificationIds } : a
+    );
     await saveAlarms(uid, updated);
     setAlarms(updated);
   };
 
   const deleteAlarm = async (id: string) => {
     if (!uid) return;
+
+    const alarm = alarms.find((a) => a.id === id);
+
+    // Cancel OS notification before deleting
+    if (alarm?.notificationIds?.length) {
+      await cancelAlarmNotification(alarm.notificationIds);
+    }
 
     const updated = await storageDeleteAlarm(uid, id);
     setAlarms(updated);
@@ -91,8 +148,29 @@ export function useAlarms() {
   const updateAlarm = async (id: string, updatedData: Omit<Alarm, "id">) => {
     if (!uid) return;
 
+    const alarm = alarms.find((a) => a.id === id);
+
+    // Cancel old notification
+    if (alarm?.notificationIds?.length) {
+      await cancelAlarmNotification(alarm.notificationIds);
+    }
+
+    let notificationIds: string[] = [];
+
+    // Re-schedule if enabled
+    if (updatedData.enabled) {
+      try {
+        notificationIds = await scheduleAlarmNotification({
+          ...updatedData,
+          id,
+        });
+      } catch (e) {
+        console.warn("[useAlarms] Failed to re-schedule notification:", e);
+      }
+    }
+
     const updated = alarms.map((a) =>
-      a.id === id ? { ...updatedData, id } : a
+      a.id === id ? { ...updatedData, id, notificationIds } : a
     );
     await saveAlarms(uid, updated);
     setAlarms(updated);

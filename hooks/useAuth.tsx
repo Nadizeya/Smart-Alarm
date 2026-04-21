@@ -1,5 +1,6 @@
 import { auth } from "@/config/firebase";
 import {
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
@@ -18,6 +19,7 @@ interface AuthContextType {
   isLoading: boolean;
   user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
+  signUp: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   /** @deprecated Firebase manages session automatically. This is a no-op kept for API compatibility. */
   checkAuth: () => Promise<void>;
@@ -29,22 +31,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Restore auth session from AsyncStorage persistence
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setIsLoading(false);
     });
-
     return () => unsubscribe();
-  }, []);
-
-  // Firebase automatically restores session from AsyncStorage persistence
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
-      setIsLoading(false);
-    });
-    return unsubscribe;
   }, []);
 
   /** No-op — kept so existing screens that call checkAuth() don't break. */
@@ -57,6 +50,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Firebase login error:", error);
       return false;
+    }
+  };
+
+  const signUp = async (
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      return { success: true };
+    } catch (error: any) {
+      console.error("Firebase signUp error:", error);
+      // Convert Firebase error codes to readable messages
+      let message = "An unexpected error occurred. Please try again.";
+      if (error?.code === "auth/email-already-in-use") {
+        message = "This email is already registered. Please log in instead.";
+      } else if (error?.code === "auth/invalid-email") {
+        message = "Please enter a valid email address.";
+      } else if (error?.code === "auth/weak-password") {
+        message = "Password is too weak. Use at least 6 characters.";
+      }
+      return { success: false, error: message };
     }
   };
 
@@ -75,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         user,
         login,
+        signUp,
         logout,
         checkAuth,
       }}

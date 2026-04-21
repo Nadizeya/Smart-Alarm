@@ -9,10 +9,21 @@ import {
 } from "@/constants/types";
 import { useMockQuestion } from "@/hooks/useMockQuestion";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Audio } from "expo-av";
+import * as KeepAwake from "expo-keep-awake";
 import React, { useEffect, useRef, useState } from "react";
+import { auth } from "@/config/firebase";
+import {
+  recordAlarmCompleted,
+  recordAlarmSnoozed,
+  recordCorrectAnswer,
+} from "@/utils/statsStorage";
+import { loadSoundId } from "@/utils/soundSettings";
+import { getSoundById } from "@/utils/soundFiles";
 import {
   Alert,
   Animated,
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -43,9 +54,78 @@ export default function RingingScreen() {
 
   const shakeAnimation = useRef(new Animated.Value(0)).current;
   const pulseAnimation = useRef(new Animated.Value(1)).current;
+  const soundRef = useRef<Audio.Sound | null>(null);
 
+  // ── Keep screen on while alarm is ringing ─────────────────────────────────
   useEffect(() => {
-    // Start pulsing animation for time
+    KeepAwake.activateKeepAwakeAsync();
+    return () => {
+      KeepAwake.deactivateKeepAwake();
+    };
+  }, []);
+
+  // ── Block Android hardware back button ────────────────────────────────────
+  // Returning true intercepts the event so the user cannot skip the questions.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      // Swallow the back press — do nothing
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
+
+
+  // ── Load and loop alarm audio ─────────────────────────────────────────────
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAndPlay = async () => {
+      try {
+        // Allow audio to play even when the phone is on silent/ring mode
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: true,
+          shouldDuckAndroid: false,
+        });
+
+        // Load the user's chosen sound (falls back to default)
+        const uid = auth.currentUser?.uid;
+        const soundId = uid ? await loadSoundId(uid) : "default";
+        const soundOption = getSoundById(soundId);
+
+        const { sound } = await Audio.Sound.createAsync(
+          soundOption.asset,
+          {
+            isLooping: true,
+            volume: 1.0,
+            shouldPlay: true,
+          }
+        );
+
+        if (isMounted) {
+          soundRef.current = sound;
+        } else {
+          // Component unmounted before sound finished loading — clean up
+          await sound.unloadAsync();
+        }
+      } catch (error) {
+        console.warn("[RingingScreen] Failed to load alarm sound:", error);
+      }
+    };
+
+    loadAndPlay();
+
+    return () => {
+      isMounted = false;
+      // Stop and unload sound when screen unmounts (dismissed or snoozed)
+      soundRef.current?.stopAsync().then(() => {
+        soundRef.current?.unloadAsync();
+      });
+    };
+  }, []);
+
+  // ── Pulse animation ───────────────────────────────────────────────────────
+  useEffect(() => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnimation, {
@@ -61,6 +141,16 @@ export default function RingingScreen() {
       ]),
     ).start();
   }, []);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  const stopSound = async () => {
+    if (soundRef.current) {
+      await soundRef.current.stopAsync();
+      await soundRef.current.unloadAsync();
+      soundRef.current = null;
+    }
+  };
 
   const getCurrentTime = () => {
     const now = new Date();
@@ -97,28 +187,40 @@ export default function RingingScreen() {
     ]).start(() => setShake(false));
   };
 
-  const handleSubmit = () => {
+  // ── Answer handling ───────────────────────────────────────────────────────
+
+  const handleSubmit = async () => {
     if (!userAnswer.trim()) {
       Alert.alert("Empty Answer", "Please enter an answer");
       return;
     }
 
     const isCorrect = checkAnswer(userAnswer, currentQuestion.correctAnswer);
+    const uid = auth.currentUser?.uid;
 
     if (isCorrect) {
       const newCorrectCount = correctCount + 1;
       setCorrectCount(newCorrectCount);
       setUserAnswer("");
 
+      // Record each correct answer
+      if (uid) recordCorrectAnswer(uid).catch(() => {});
+
       if (newCorrectCount >= questionsRequired) {
-        // All questions answered correctly
+        // All questions answered — record completion, stop alarm, go to success
+        if (uid) {
+          if (mode === "Snooze") {
+            recordAlarmSnoozed(uid).catch(() => {});
+          } else {
+            recordAlarmCompleted(uid).catch(() => {});
+          }
+        }
+        await stopSound();
         router.replace("/success");
       } else {
-        // Generate next question
         setCurrentQuestion(generateQuestion(theme, difficulty));
       }
     } else {
-      // Wrong answer - shake animation
       triggerShake();
       Alert.alert(
         "Incorrect Answer",
@@ -135,6 +237,8 @@ export default function RingingScreen() {
       );
     }
   };
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <KeyboardAvoidingView

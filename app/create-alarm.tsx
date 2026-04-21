@@ -1,20 +1,22 @@
 import { DifficultySelector } from "@/components/DifficultySelector";
 import { ThemeSelector } from "@/components/ThemeSelector";
+import { auth } from "@/config/firebase";
 import { Colors } from "@/constants/colors";
 import { AlarmMode, AlarmTheme, DifficultyLevel } from "@/constants/types";
 import { useAlarms } from "@/hooks/useAlarms";
+import { recordAlarmCreated } from "@/utils/statsStorage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -53,6 +55,9 @@ export default function CreateAlarmScreen() {
         mode,
         label: "",
       });
+      // Record the alarm creation in stats
+      const uid = auth.currentUser?.uid;
+      if (uid) recordAlarmCreated(uid).catch(() => {});
       router.back();
     } catch (e) {
       Alert.alert("Error", "Failed to save alarm. Please try again.");
@@ -79,13 +84,21 @@ export default function CreateAlarmScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} disabled={saving}>
+        <TouchableOpacity
+          style={styles.headerSide}
+          onPress={() => router.back()}
+          disabled={saving}
+        >
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
           {isEdit ? "Edit Alarm" : "New Alarm"}
         </Text>
-        <TouchableOpacity onPress={handleSave} disabled={saving}>
+        <TouchableOpacity
+          style={[styles.headerSide, styles.headerSideRight]}
+          onPress={handleSave}
+          disabled={saving}
+        >
           {saving ? (
             <ActivityIndicator size="small" color={Colors.primaryLight} />
           ) : (
@@ -158,7 +171,7 @@ export default function CreateAlarmScreen() {
         </View>
 
         {/* Mode Selector */}
-        <View style={styles.section}>
+        <View style={styles.alarmModeSection}>
           <Text style={styles.sectionLabel}>Alarm Mode</Text>
           <View style={styles.modeContainer}>
             <TouchableOpacity
@@ -226,7 +239,6 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     paddingTop: 60,
     paddingBottom: 16,
@@ -235,10 +247,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
+  // Each side slot gets a fixed width so the centre title stays centred
+  headerSide: {
+    minWidth: 64,
+  },
+  headerSideRight: {
+    alignItems: "flex-end",
+  },
   headerTitle: {
+    flex: 1,
     fontSize: 18,
     fontWeight: "600",
     color: Colors.text,
+    textAlign: "center",
   },
   cancelText: {
     fontSize: 16,
@@ -252,6 +273,10 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+    paddingBottom: 12,
+  },
+  alarmModeSection: {
+    marginBottom: 100,
   },
   section: {
     marginBottom: 24,
@@ -282,14 +307,17 @@ const styles = StyleSheet.create({
   },
   daysContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    flexWrap: "wrap",
     gap: 8,
   },
   dayButton: {
+    // Each button takes equal share of the row
     flex: 1,
+    minWidth: 36,
     backgroundColor: Colors.card,
     borderRadius: 8,
     paddingVertical: 12,
+    paddingHorizontal: 4,
     alignItems: "center",
     borderWidth: 2,
     borderColor: Colors.border,

@@ -61,7 +61,7 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 12,
+    marginBottom: 24,
   },
   label: {
     fontSize: 16,
@@ -77,17 +77,18 @@ const styles = StyleSheet.create({
   option: {
     flex: 1,
     minWidth: "45%",
+    height: 100,
     backgroundColor: Colors.card,
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
     borderColor: Colors.border,
   },
   icon: {
-    fontSize: 32,
-    marginBottom: 8,
+    fontSize: 28,
+    marginBottom: 6,
     color: Colors.textSecondary,
   },
   optionText: {

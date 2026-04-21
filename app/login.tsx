@@ -1,5 +1,6 @@
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/hooks/useAuth";
+import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -95,10 +96,15 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
         </View>
-
+            
         {/* Footer */}
         <Text style={styles.footer}>Challenge your brain to wake up</Text>
-      </View>
+        <TouchableOpacity onPress={() => router.push("/signup")} activeOpacity={0.7}>
+          <Text style={styles.signupText}>
+            Don&apos;t have an account? <Text style={styles.signupLink}>Sign Up</Text>
+          </Text>
+        </TouchableOpacity>      
+        </View>
     </KeyboardAvoidingView>
   );
 }
@@ -112,6 +118,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     paddingHorizontal: 24,
+  },
+  signupText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: "center",
+
   },
   header: {
     alignItems: "center",
@@ -137,6 +150,10 @@ const styles = StyleSheet.create({
   inputContainer: {
     marginBottom: 20,
   },
+  signupLink: {
+  color: Colors.primaryLight,
+  fontWeight: "700",
+},
   label: {
     fontSize: 14,
     fontWeight: "600",

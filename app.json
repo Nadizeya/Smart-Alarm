@@ -29,7 +29,8 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.WAKE_LOCK",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.USE_FULL_SCREEN_INTENT"
       ]
     },
     "web": {
@@ -44,10 +45,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
+          "backgroundColor": "#0D1B2A"
         }
       ],
       "@react-native-community/datetimepicker",
@@ -56,7 +54,12 @@
         {
           "icon": "./assets/images/icon.png",
           "color": "#4A90D9",
-          "sounds": ["./assets/sounds/alarm.wav"]
+                "sounds": [
+          "./assets/sounds/default.wav",
+          "./assets/sounds/digital.wav",
+          "./assets/sounds/rooster.wav",
+          "./assets/sounds/casino_sound.wav"
+        ]
         }
       ],
       [

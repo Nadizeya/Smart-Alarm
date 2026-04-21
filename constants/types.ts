@@ -13,6 +13,7 @@ export interface Alarm {
   difficulty: DifficultyLevel;
   mode: AlarmMode;
   label?: string;
+  notificationIds?: string[]; // expo-notifications identifiers (one per repeat day)
 }
 
 export interface Question {

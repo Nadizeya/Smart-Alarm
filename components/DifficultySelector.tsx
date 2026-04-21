@@ -53,7 +53,7 @@ export const DifficultySelector: React.FC<DifficultySelectorProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 12,
+    marginBottom: 12,
   },
   label: {
     fontSize: 16,

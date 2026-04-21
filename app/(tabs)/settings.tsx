@@ -1,46 +1,183 @@
 import { Colors } from "@/constants/colors";
 import { useAuth } from "@/hooks/useAuth";
-import React, { useState } from "react";
+import { saveStats, UserStats } from "@/utils/statsStorage";
+import { loadSoundId, saveSoundId } from "@/utils/soundSettings";
+import { ALARM_SOUNDS, SoundOption } from "@/utils/soundFiles";
+import { Audio } from "expo-av";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
-interface SettingItem {
-  id: string;
-  title: string;
-  subtitle?: string;
-  type: "switch" | "button" | "info";
-  value?: boolean;
-  icon?: string;
-  onPress?: () => void;
+// ─── "Coming Soon" readonly text box ─────────────────────────────────────────
+
+function ComingSoonBox({ label }: { label: string }) {
+  return (
+    <View style={styles.comingSoonBox}>
+      <TextInput
+        style={styles.comingSoonInput}
+        value={`${label} — Coming soon in version 2`}
+        editable={false}
+        selectTextOnFocus={false}
+      />
+    </View>
+  );
 }
 
-export default function SettingsScreen() {
-  const { logout } = useAuth();
-  const [notifications, setNotifications] = useState(true);
-  const [vibration, setVibration] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+// ─── Sound Picker ─────────────────────────────────────────────────────────────
 
-  const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        // AuthGuard in _layout.tsx detects isAuthenticated → false and
-        // redirects to /login automatically. No manual navigation needed.
-        onPress: () => logout(),
-      },
-    ]);
+interface SoundPickerProps {
+  selectedId: string;
+  onSelect: (id: string) => void;
+}
+
+function SoundPicker({ selectedId, onSelect }: SoundPickerProps) {
+  const previewRef = useRef<Audio.Sound | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+
+  // Stop preview when component unmounts
+  useEffect(() => {
+    return () => {
+      previewRef.current?.stopAsync().then(() => {
+        previewRef.current?.unloadAsync();
+      });
+    };
+  }, []);
+
+  const stopPreview = async () => {
+    if (previewRef.current) {
+      await previewRef.current.stopAsync();
+      await previewRef.current.unloadAsync();
+      previewRef.current = null;
+    }
+    setPlayingId(null);
   };
 
+  const handlePreview = async (sound: SoundOption) => {
+    // If this sound is already playing, stop it
+    if (playingId === sound.id) {
+      await stopPreview();
+      return;
+    }
+
+    // Stop any currently playing preview
+    await stopPreview();
+
+    try {
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+
+      const { sound: avSound } = await Audio.Sound.createAsync(
+        sound.asset,
+        { shouldPlay: true, volume: 0.8 }
+      );
+      previewRef.current = avSound;
+      setPlayingId(sound.id);
+
+      // Auto-stop after 5 seconds
+      avSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          stopPreview();
+        }
+      });
+      setTimeout(() => {
+        if (previewRef.current) stopPreview();
+      }, 5000);
+    } catch (e) {
+      console.warn("[SoundPicker] Preview failed:", e);
+    }
+  };
+
+  const handleSelect = async (sound: SoundOption) => {
+    await stopPreview();
+    onSelect(sound.id);
+  };
+
+  return (
+    <View style={styles.soundPickerContainer}>
+      {ALARM_SOUNDS.map((sound) => {
+        const isSelected = sound.id === selectedId;
+        const isPlaying = sound.id === playingId;
+
+        return (
+          <View key={sound.id} style={styles.soundRow}>
+            {/* Play / Stop preview button */}
+            <TouchableOpacity
+              style={[styles.playButton, isPlaying && styles.playButtonActive]}
+              onPress={() => handlePreview(sound)}
+            >
+              <Text style={styles.playButtonText}>{isPlaying ? "⏹" : "▶"}</Text>
+            </TouchableOpacity>
+
+            {/* Sound name — tap to select */}
+            <TouchableOpacity
+              style={styles.soundNameContainer}
+              onPress={() => handleSelect(sound)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.soundName,
+                  isSelected && styles.soundNameSelected,
+                ]}
+              >
+                {sound.label}
+              </Text>
+              {isPlaying && (
+                <Text style={styles.soundPlaying}>Playing preview…</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Checkmark for selected */}
+            {isSelected && (
+              <Text style={styles.soundCheck}>✓</Text>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
+
+export default function SettingsScreen() {
+  const { logout, user } = useAuth();
+
+  const [notifications, setNotifications] = useState(true);
+  const [vibration, setVibration] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
+  // Sound selection state
+  const [selectedSoundId, setSelectedSoundId] = useState("default");
+
+  // Load user's current sound preference
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.uid) return;
+      loadSoundId(user.uid).then(setSelectedSoundId);
+    }, [user?.uid])
+  );
+
+  const handleSoundSelect = async (id: string) => {
+    setSelectedSoundId(id);
+    if (user?.uid) {
+      await saveSoundId(user.uid, id);
+    }
+  };
+
+  // ── Stat reset ───────────────────────────────────────────────────────────────
   const handleResetStats = () => {
     Alert.alert(
       "Reset Statistics",
@@ -50,14 +187,38 @@ export default function SettingsScreen() {
         {
           text: "Reset",
           style: "destructive",
-          onPress: () => {
-            Alert.alert("Success", "Statistics have been reset");
+          onPress: async () => {
+            if (!user?.uid) return;
+            const blank: UserStats = {
+              alarmsCreated: 0,
+              alarmsCompleted: 0,
+              alarmsSnoozed: 0,
+              questionsCorrect: 0,
+              currentStreak: 0,
+              bestStreak: 0,
+              lastCompletedAt: null,
+            };
+            await saveStats(user.uid, blank);
+            Alert.alert("Done", "Statistics have been reset.");
           },
         },
       ],
     );
   };
 
+  // ── Logout ───────────────────────────────────────────────────────────────────
+  const handleLogout = () => {
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: () => logout(),
+      },
+    ]);
+  };
+
+  // ── About ─────────────────────────────────────────────────────────────────────
   const handleAbout = () => {
     Alert.alert(
       "Smart Alarm",
@@ -65,6 +226,8 @@ export default function SettingsScreen() {
       [{ text: "OK" }],
     );
   };
+
+  // ── Sections ──────────────────────────────────────────────────────────────────
 
   const sections = [
     {
@@ -76,7 +239,7 @@ export default function SettingsScreen() {
           subtitle: "Receive alarm notifications",
           type: "switch" as const,
           value: notifications,
-          onPress: () => setNotifications(!notifications),
+          onPress: () => setNotifications((v) => !v),
         },
         {
           id: "sound",
@@ -84,7 +247,7 @@ export default function SettingsScreen() {
           subtitle: "Play alarm sound",
           type: "switch" as const,
           value: soundEnabled,
-          onPress: () => setSoundEnabled(!soundEnabled),
+          onPress: () => setSoundEnabled((v) => !v),
         },
         {
           id: "vibration",
@@ -92,20 +255,7 @@ export default function SettingsScreen() {
           subtitle: "Vibrate on alarm",
           type: "switch" as const,
           value: vibration,
-          onPress: () => setVibration(!vibration),
-        },
-      ],
-    },
-    {
-      title: "Appearance",
-      items: [
-        {
-          id: "darkMode",
-          title: "Dark Mode",
-          subtitle: "Use dark blue theme",
-          type: "switch" as const,
-          value: darkMode,
-          onPress: () => setDarkMode(!darkMode),
+          onPress: () => setVibration((v) => !v),
         },
       ],
     },
@@ -115,19 +265,8 @@ export default function SettingsScreen() {
         {
           id: "email",
           title: "Email",
-          subtitle: "user@smartalarm.com",
+          subtitle: user?.email ?? "—",
           type: "info" as const,
-        },
-        {
-          id: "changePassword",
-          title: "Change Password",
-          type: "button" as const,
-          icon: "🔑",
-          onPress: () =>
-            Alert.alert(
-              "Coming Soon",
-              "Password change feature will be available soon",
-            ),
         },
       ],
     },
@@ -137,19 +276,11 @@ export default function SettingsScreen() {
         {
           id: "resetStats",
           title: "Reset Statistics",
-          subtitle: "Clear all alarm history",
+          subtitle: "Clear all alarm history and stats",
           type: "button" as const,
           icon: "🗑️",
           onPress: handleResetStats,
-        },
-        {
-          id: "export",
-          title: "Export Data",
-          subtitle: "Download your alarm data",
-          type: "button" as const,
-          icon: "📥",
-          onPress: () =>
-            Alert.alert("Coming Soon", "Data export will be available soon"),
+          danger: true,
         },
       ],
     },
@@ -157,22 +288,15 @@ export default function SettingsScreen() {
       title: "Support",
       items: [
         {
-          id: "help",
-          title: "Help & FAQ",
+          id: "privacy",
+          title: "Privacy & Policy",
           type: "button" as const,
-          icon: "❓",
-          onPress: () =>
-            Alert.alert("Help", "Visit our website for FAQs and support"),
-        },
-        {
-          id: "feedback",
-          title: "Send Feedback",
-          type: "button" as const,
-          icon: "💬",
+          icon: "🔒",
           onPress: () =>
             Alert.alert(
-              "Feedback",
-              "Thank you for your interest! Feedback form coming soon.",
+              "Privacy & Policy",
+              "Smart Alarm collects only the data needed to provide alarm functionality.\n\nWe store your alarms and statistics locally on your device.\n\nFirebase Authentication is used for account management. No personal data is shared with third parties.\n\nFor questions, contact: privacy@smartalarm.app",
+              [{ text: "OK" }],
             ),
         },
         {
@@ -186,21 +310,27 @@ export default function SettingsScreen() {
     },
   ];
 
-  const renderSettingItem = (item: SettingItem) => {
+  // ── Renderers ─────────────────────────────────────────────────────────────────
+
+  const renderItem = (item: (typeof sections)[0]["items"][0]) => {
     if (item.type === "switch") {
       return (
         <View key={item.id} style={styles.settingItem}>
           <View style={styles.settingInfo}>
             <Text style={styles.settingTitle}>{item.title}</Text>
-            {item.subtitle && (
+            {"subtitle" in item && item.subtitle ? (
               <Text style={styles.settingSubtitle}>{item.subtitle}</Text>
-            )}
+            ) : null}
           </View>
           <Switch
-            value={item.value}
+            value={"value" in item ? item.value : false}
             onValueChange={item.onPress}
             trackColor={{ false: Colors.border, true: Colors.primaryLight }}
-            thumbColor={item.value ? Colors.primaryLight : Colors.textSecondary}
+            thumbColor={
+              "value" in item && item.value
+                ? Colors.primaryLight
+                : Colors.textSecondary
+            }
           />
         </View>
       );
@@ -211,13 +341,15 @@ export default function SettingsScreen() {
         <View key={item.id} style={styles.settingItem}>
           <View style={styles.settingInfo}>
             <Text style={styles.settingTitle}>{item.title}</Text>
-            {item.subtitle && (
+            {"subtitle" in item && item.subtitle ? (
               <Text style={styles.settingSubtitle}>{item.subtitle}</Text>
-            )}
+            ) : null}
           </View>
         </View>
       );
     }
+
+    const isDanger = "danger" in item && item.danger;
 
     return (
       <TouchableOpacity
@@ -228,17 +360,25 @@ export default function SettingsScreen() {
       >
         <View style={styles.settingInfo}>
           <View style={styles.settingTitleRow}>
-            {item.icon && <Text style={styles.settingIcon}>{item.icon}</Text>}
-            <Text style={styles.settingTitle}>{item.title}</Text>
+            {"icon" in item && item.icon ? (
+              <Text style={styles.settingIcon}>{item.icon}</Text>
+            ) : null}
+            <Text
+              style={[styles.settingTitle, isDanger && { color: Colors.error }]}
+            >
+              {item.title}
+            </Text>
           </View>
-          {item.subtitle && (
+          {"subtitle" in item && item.subtitle ? (
             <Text style={styles.settingSubtitle}>{item.subtitle}</Text>
-          )}
+          ) : null}
         </View>
         <Text style={styles.chevron}>›</Text>
       </TouchableOpacity>
     );
   };
+
+  // ── JSX ───────────────────────────────────────────────────────────────────────
 
   return (
     <View style={styles.container}>
@@ -247,13 +387,16 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+
         {/* User Profile */}
         <View style={styles.profileSection}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>👤</Text>
           </View>
-          <Text style={styles.userName}>Smart User</Text>
-          <Text style={styles.userEmail}>user@smartalarm.com</Text>
+          <Text style={styles.userName}>
+            {user?.displayName ?? "Smart User"}
+          </Text>
+          <Text style={styles.userEmail}>{user?.email ?? ""}</Text>
         </View>
 
         {/* Settings Sections */}
@@ -261,12 +404,47 @@ export default function SettingsScreen() {
           <View key={section.title} style={styles.section}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
             <View style={styles.sectionContent}>
-              {section.items.map((item) => renderSettingItem(item))}
+              {section.items.map((item) => renderItem(item))}
             </View>
           </View>
         ))}
 
-        {/* Logout Button */}
+        {/* ── Alarm Sound Picker ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Alarm Sound</Text>
+          <View style={styles.sectionContent}>
+            <View style={styles.soundPickerWrapper}>
+              <Text style={styles.soundPickerHint}>
+                Tap ▶ to preview · Tap the name to select
+              </Text>
+              <SoundPicker
+                selectedId={selectedSoundId}
+                onSelect={handleSoundSelect}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* ── Appearance — theme & password coming soon ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Appearance</Text>
+          <View style={styles.sectionContent}>
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Theme</Text>
+                <ComingSoonBox label="Theme customisation" />
+              </View>
+            </View>
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Change Password</Text>
+                <ComingSoonBox label="Password change" />
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Logout */}
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={handleLogout}
@@ -277,14 +455,14 @@ export default function SettingsScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Smart Alarm v1.0.0</Text>
-          <Text style={styles.footerText}>
-            Made with ❤️ for better mornings
-          </Text>
+          <Text style={styles.footerText}>Made with ❤️ for better mornings</Text>
         </View>
       </ScrollView>
     </View>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: {
@@ -307,6 +485,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  // Profile
   profileSection: {
     alignItems: "center",
     paddingVertical: 32,
@@ -335,6 +514,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
   },
+  // Sections
   section: {
     marginBottom: 24,
   },
@@ -353,6 +533,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: Colors.border,
   },
+  // Items
   settingItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -378,6 +559,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
     color: Colors.text,
+    marginBottom: 6,
   },
   settingSubtitle: {
     fontSize: 13,
@@ -389,6 +571,85 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontWeight: "300",
   },
+  // Coming soon
+  comingSoonBox: {
+    marginTop: 4,
+  },
+  comingSoonInput: {
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontStyle: "italic",
+  },
+  // Sound picker
+  soundPickerWrapper: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  soundPickerHint: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 12,
+    fontStyle: "italic",
+  },
+  soundPickerContainer: {
+    gap: 4,
+  },
+  soundRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    gap: 12,
+  },
+  playButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.background,
+    borderWidth: 1.5,
+    borderColor: Colors.primaryLight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  playButtonActive: {
+    backgroundColor: Colors.primaryLight,
+  },
+  playButtonText: {
+    fontSize: 13,
+    color: Colors.primaryLight,
+  },
+  soundNameContainer: {
+    flex: 1,
+  },
+  soundName: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: Colors.text,
+  },
+  soundNameSelected: {
+    color: Colors.primaryLight,
+    fontWeight: "700",
+  },
+  soundPlaying: {
+    fontSize: 11,
+    color: Colors.primaryLight,
+    marginTop: 2,
+    fontStyle: "italic",
+  },
+  soundCheck: {
+    fontSize: 18,
+    color: Colors.primaryLight,
+    fontWeight: "700",
+  },
+  // Logout
   logoutButton: {
     backgroundColor: Colors.error,
     marginHorizontal: 20,
@@ -407,6 +668,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.white,
   },
+  // Footer
   footer: {
     alignItems: "center",
     paddingVertical: 20,

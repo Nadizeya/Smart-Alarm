@@ -1,196 +1,100 @@
 import { Colors } from "@/constants/colors";
-import React, { useRef, useState } from "react";
+import { useStats } from "@/hooks/useStats";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback } from "react";
 import {
-  Animated,
-  Dimensions,
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 
-const { width } = Dimensions.get("window");
-const CARD_WIDTH = width * 0.85;
-const CARD_MARGIN = 15;
+// ─── Stat card component ──────────────────────────────────────────────────────
 
-interface AlarmHistoryItem {
-  id: string;
-  date: string;
-  time: string;
-  theme: string;
-  difficulty: string;
-  questionsAnswered: number;
-  totalQuestions: number;
-  success: boolean;
+interface StatCardProps {
+  value: string | number;
+  label: string;
+  valueColor?: string;
+  emoji: string;
 }
 
-// Mock history data
-const HISTORY_DATA: AlarmHistoryItem[] = [
-  {
-    id: "1",
-    date: "Today, Feb 19",
-    time: "7:00 AM",
-    theme: "Math",
-    difficulty: "Medium",
-    questionsAnswered: 3,
-    totalQuestions: 3,
-    success: true,
-  },
-  {
-    id: "2",
-    date: "Yesterday, Feb 18",
-    time: "7:00 AM",
-    theme: "Logic",
-    difficulty: "Hard",
-    questionsAnswered: 2,
-    totalQuestions: 3,
-    success: false,
-  },
-  {
-    id: "3",
-    date: "Feb 17",
-    time: "7:00 AM",
-    theme: "English",
-    difficulty: "Easy",
-    questionsAnswered: 3,
-    totalQuestions: 3,
-    success: true,
-  },
-  {
-    id: "4",
-    date: "Feb 16",
-    time: "7:00 AM",
-    theme: "Chinese",
-    difficulty: "Medium",
-    questionsAnswered: 3,
-    totalQuestions: 3,
-    success: true,
-  },
-  {
-    id: "5",
-    date: "Feb 15",
-    time: "7:00 AM",
-    theme: "Math",
-    difficulty: "Hard",
-    questionsAnswered: 1,
-    totalQuestions: 3,
-    success: false,
-  },
-];
+function StatCard({ value, label, valueColor, emoji }: StatCardProps) {
+  return (
+    <View style={styles.statCard}>
+      <Text style={styles.statEmoji}>{emoji}</Text>
+      <Text style={[styles.statValue, valueColor ? { color: valueColor } : {}]}>
+        {value}
+      </Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
 
-// Stats data
-const STATS = {
-  totalAlarms: 47,
-  successRate: 89,
-  currentStreak: 5,
-  bestStreak: 12,
-  avgWakeTime: "7:15 AM",
-  totalQuestions: 156,
-};
+// ─── Row stat (for the summary section) ───────────────────────────────────────
+
+interface StatRowProps {
+  label: string;
+  value: string | number;
+  emoji: string;
+}
+
+function StatRow({ label, value, emoji }: StatRowProps) {
+  return (
+    <View style={styles.statRow}>
+      <Text style={styles.rowEmoji}>{emoji}</Text>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.rowValue}>{value}</Text>
+    </View>
+  );
+}
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function StatisticsScreen() {
-  const [activeCard, setActiveCard] = useState(0);
-  const scrollX = useRef(new Animated.Value(0)).current;
+  const { stats, loading, successRate, refreshStats } = useStats();
 
-  const getThemeColor = (theme: string) => {
-    switch (theme) {
-      case "Math":
-        return Colors.themeMath;
-      case "Logic":
-        return Colors.themeLogic;
-      case "Chinese":
-        return Colors.themeChinese;
-      case "English":
-        return Colors.themeEnglish;
-      default:
-        return Colors.textSecondary;
-    }
-  };
+  // Reload stats every time this tab comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      refreshStats();
+    }, [])
+  );
 
-  const renderHistoryCard = (item: AlarmHistoryItem, index: number) => {
-    const inputRange = [
-      (index - 1) * (CARD_WIDTH + CARD_MARGIN * 2),
-      index * (CARD_WIDTH + CARD_MARGIN * 2),
-      (index + 1) * (CARD_WIDTH + CARD_MARGIN * 2),
-    ];
-
-    const scale = scrollX.interpolate({
-      inputRange,
-      outputRange: [0.9, 1, 0.9],
-      extrapolate: "clamp",
-    });
-
-    const opacity = scrollX.interpolate({
-      inputRange,
-      outputRange: [0.6, 1, 0.6],
-      extrapolate: "clamp",
-    });
-
+  // ── Loading state ──────────────────────────────────────────────────────────
+  if (loading) {
     return (
-      <Animated.View
-        key={item.id}
-        style={[
-          styles.historyCard,
-          {
-            transform: [{ scale }],
-            opacity,
-          },
-        ]}
-      >
-        <View style={styles.cardHeader}>
-          <View>
-            <Text style={styles.cardDate}>{item.date}</Text>
-            <Text style={styles.cardTime}>{item.time}</Text>
-          </View>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: item.success ? Colors.success : Colors.error },
-            ]}
-          >
-            <Text style={styles.statusText}>
-              {item.success ? "✓ Dismissed" : "✗ Snoozed"}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.cardBody}>
-          <View style={styles.themeRow}>
-            <View
-              style={[
-                styles.themeBadge,
-                { backgroundColor: getThemeColor(item.theme) },
-              ]}
-            >
-              <Text style={styles.themeBadgeText}>{item.theme}</Text>
-            </View>
-            <Text style={styles.difficultyText}>{item.difficulty}</Text>
-          </View>
-
-          <View style={styles.progressSection}>
-            <Text style={styles.progressLabel}>Questions Answered</Text>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    width: `${(item.questionsAnswered / item.totalQuestions) * 100}%`,
-                    backgroundColor: item.success
-                      ? Colors.success
-                      : Colors.error,
-                  },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>
-              {item.questionsAnswered} / {item.totalQuestions}
-            </Text>
-          </View>
-        </View>
-      </Animated.View>
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={Colors.primaryLight} />
+      </View>
     );
-  };
+  }
 
+  // ── No data yet ────────────────────────────────────────────────────────────
+  const hasData =
+    stats !== null &&
+    (stats.alarmsCreated > 0 ||
+      stats.alarmsCompleted > 0 ||
+      stats.alarmsSnoozed > 0);
+
+  if (!hasData) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Statistics</Text>
+        </View>
+        <View style={styles.centered}>
+          <Text style={styles.emptyEmoji}>📊</Text>
+          <Text style={styles.emptyTitle}>No data yet</Text>
+          <Text style={styles.emptySubtext}>
+            Create and complete alarms to start tracking your progress.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Real data ──────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -198,123 +102,133 @@ export default function StatisticsScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Stats Grid */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{STATS.totalAlarms}</Text>
-            <Text style={styles.statLabel}>Total Alarms</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={[styles.statValue, { color: Colors.success }]}>
-              {STATS.successRate}%
-            </Text>
-            <Text style={styles.statLabel}>Success Rate</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={[styles.statValue, { color: Colors.warning }]}>
-              {STATS.currentStreak}
-            </Text>
-            <Text style={styles.statLabel}>Current Streak</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{STATS.bestStreak}</Text>
-            <Text style={styles.statLabel}>Best Streak</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{STATS.avgWakeTime}</Text>
-            <Text style={styles.statLabel}>Avg Wake Time</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{STATS.totalQuestions}</Text>
-            <Text style={styles.statLabel}>Total Questions</Text>
+
+        {/* ── Top stat grid ── */}
+        <View style={styles.gridSection}>
+          <StatCard
+            emoji="⏰"
+            value={stats!.alarmsCreated}
+            label="Alarms Created"
+          />
+          <StatCard
+            emoji="✅"
+            value={stats!.alarmsCompleted}
+            label="Completed"
+            valueColor={Colors.success}
+          />
+          <StatCard
+            emoji="😴"
+            value={stats!.alarmsSnoozed}
+            label="Snoozed"
+            valueColor={Colors.warning}
+          />
+          <StatCard
+            emoji="🎯"
+            value={`${successRate}%`}
+            label="Success Rate"
+            valueColor={successRate >= 70 ? Colors.success : Colors.error}
+          />
+          <StatCard
+            emoji="🔥"
+            value={stats!.currentStreak}
+            label="Current Streak"
+            valueColor={Colors.warning}
+          />
+          <StatCard
+            emoji="🏆"
+            value={stats!.bestStreak}
+            label="Best Streak"
+          />
+        </View>
+
+        {/* ── Summary section ── */}
+        <View style={styles.summarySection}>
+          <Text style={styles.sectionTitle}>Summary</Text>
+
+          <View style={styles.summaryCard}>
+            <StatRow
+              emoji="💡"
+              label="Questions Correct"
+              value={stats!.questionsCorrect}
+            />
+            <View style={styles.divider} />
+            <StatRow
+              emoji="📅"
+              label="Last Completed"
+              value={
+                stats!.lastCompletedAt
+                  ? new Date(stats!.lastCompletedAt).toLocaleDateString(
+                      "en-US",
+                      { month: "short", day: "numeric", year: "numeric" }
+                    )
+                  : "—"
+              }
+            />
+            <View style={styles.divider} />
+            <StatRow
+              emoji="📈"
+              label="Total Alarms Fired"
+              value={stats!.alarmsCompleted + stats!.alarmsSnoozed}
+            />
           </View>
         </View>
 
-        {/* Carousel Section */}
-        <View style={styles.carouselSection}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <Text style={styles.sectionSubtitle}>
-            Swipe to see your alarm history
-          </Text>
-
-          <Animated.ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            snapToInterval={CARD_WIDTH + CARD_MARGIN * 2}
-            decelerationRate="fast"
-            contentContainerStyle={styles.carouselContent}
-            onScroll={Animated.event(
-              [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-              { useNativeDriver: true },
-            )}
-            scrollEventThrottle={16}
-            onMomentumScrollEnd={(event) => {
-              const index = Math.round(
-                event.nativeEvent.contentOffset.x /
-                  (CARD_WIDTH + CARD_MARGIN * 2),
-              );
-              setActiveCard(index);
-            }}
-          >
-            {HISTORY_DATA.map((item, index) => renderHistoryCard(item, index))}
-          </Animated.ScrollView>
-
-          {/* Pagination Dots */}
-          <View style={styles.pagination}>
-            {HISTORY_DATA.map((_, index) => (
+        {/* ── Success rate visual ── */}
+        <View style={styles.summarySection}>
+          <Text style={styles.sectionTitle}>Success Rate</Text>
+          <View style={styles.summaryCard}>
+            <View style={styles.rateRow}>
+              <Text style={styles.rateNumber}>{successRate}%</Text>
+              <Text style={styles.rateLabel}>
+                {successRate >= 80
+                  ? "Excellent! 🌟"
+                  : successRate >= 60
+                  ? "Good job! 👍"
+                  : successRate >= 40
+                  ? "Keep going! 💪"
+                  : "Just getting started! 🚀"}
+              </Text>
+            </View>
+            <View style={styles.progressBarBg}>
               <View
-                key={index}
                 style={[
-                  styles.paginationDot,
-                  activeCard === index && styles.paginationDotActive,
+                  styles.progressBarFill,
+                  {
+                    width: `${successRate}%`,
+                    backgroundColor:
+                      successRate >= 70 ? Colors.success : Colors.warning,
+                  },
                 ]}
               />
-            ))}
+            </View>
+            <View style={styles.progressLabels}>
+              <Text style={styles.progressLabelText}>
+                ✅ {stats!.alarmsCompleted} dismissed
+              </Text>
+              <Text style={styles.progressLabelText}>
+                😴 {stats!.alarmsSnoozed} snoozed
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* Weekly Chart Section */}
-        <View style={styles.chartSection}>
-          <Text style={styles.sectionTitle}>This Week</Text>
-          <View style={styles.weeklyChart}>
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(
-              (day, index) => {
-                const height = [85, 100, 90, 100, 95, 70, 80][index];
-                const success = [true, true, true, true, true, false, true][
-                  index
-                ];
-                return (
-                  <View key={day} style={styles.chartBar}>
-                    <View style={styles.barContainer}>
-                      <View
-                        style={[
-                          styles.bar,
-                          {
-                            height: `${height}%`,
-                            backgroundColor: success
-                              ? Colors.success
-                              : Colors.error,
-                          },
-                        ]}
-                      />
-                    </View>
-                    <Text style={styles.chartLabel}>{day}</Text>
-                  </View>
-                );
-              },
-            )}
-          </View>
-        </View>
       </ScrollView>
     </View>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 40,
   },
   header: {
     paddingTop: 60,
@@ -329,182 +243,138 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.text,
   },
-  statsGrid: {
+  // Empty state
+  emptyEmoji: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  // Stat grid
+  gridSection: {
     flexDirection: "row",
     flexWrap: "wrap",
-    padding: 15,
+    padding: 16,
     gap: 10,
   },
   statCard: {
-    width: "31%",
+    width: "30%",
+    flexGrow: 1,
     backgroundColor: Colors.card,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 14,
+    padding: 14,
     alignItems: "center",
     borderWidth: 1,
     borderColor: Colors.border,
+    gap: 4,
+  },
+  statEmoji: {
+    fontSize: 24,
+    marginBottom: 4,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "700",
     color: Colors.primaryLight,
-    marginBottom: 4,
   },
   statLabel: {
     fontSize: 11,
     color: Colors.textSecondary,
     textAlign: "center",
   },
-  carouselSection: {
-    marginTop: 20,
+  // Summary section
+  summarySection: {
+    paddingHorizontal: 16,
     marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
     color: Colors.text,
-    paddingHorizontal: 20,
-    marginBottom: 4,
+    marginBottom: 12,
   },
-  sectionSubtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
-  carouselContent: {
-    paddingHorizontal: (width - CARD_WIDTH) / 2,
-  },
-  historyCard: {
-    width: CARD_WIDTH,
+  summaryCard: {
     backgroundColor: Colors.card,
-    borderRadius: 16,
-    padding: 20,
-    marginHorizontal: CARD_MARGIN,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.border,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
-  cardDate: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: Colors.text,
-    marginBottom: 4,
-  },
-  cardTime: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: Colors.white,
-  },
-  cardBody: {
-    gap: 16,
-  },
-  themeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  themeBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  themeBadgeText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: Colors.white,
-  },
-  difficultyText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  progressSection: {
-    gap: 8,
-  },
-  progressLabel: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: Colors.border,
-    borderRadius: 4,
     overflow: "hidden",
   },
-  progressFill: {
-    height: "100%",
-    borderRadius: 4,
-  },
-  progressText: {
-    fontSize: 12,
-    color: Colors.text,
-    fontWeight: "600",
-  },
-  pagination: {
+  statRow: {
     flexDirection: "row",
-    justifyContent: "center",
     alignItems: "center",
-    marginTop: 16,
-    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
   },
-  paginationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  rowEmoji: {
+    fontSize: 20,
+    width: 28,
+    textAlign: "center",
+  },
+  rowLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.text,
+  },
+  rowValue: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: Colors.primaryLight,
+  },
+  divider: {
+    height: 1,
     backgroundColor: Colors.border,
+    marginHorizontal: 16,
   },
-  paginationDotActive: {
-    width: 24,
-    backgroundColor: Colors.primaryLight,
+  // Success rate bar
+  rateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    gap: 12,
   },
-  chartSection: {
-    paddingHorizontal: 20,
-    marginBottom: 40,
+  rateNumber: {
+    fontSize: 36,
+    fontWeight: "700",
+    color: Colors.primaryLight,
   },
-  weeklyChart: {
+  rateLabel: {
+    fontSize: 15,
+    color: Colors.text,
+    flex: 1,
+  },
+  progressBarBg: {
+    height: 12,
+    backgroundColor: Colors.border,
+    borderRadius: 6,
+    marginHorizontal: 16,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    borderRadius: 6,
+  },
+  progressLabels: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-end",
-    height: 180,
-    marginTop: 20,
-    backgroundColor: Colors.card,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  chartBar: {
-    flex: 1,
-    alignItems: "center",
-    gap: 8,
-  },
-  barContainer: {
-    flex: 1,
-    width: "70%",
-    justifyContent: "flex-end",
-  },
-  bar: {
-    width: "100%",
-    borderRadius: 4,
-    minHeight: 20,
-  },
-  chartLabel: {
-    fontSize: 11,
+  progressLabelText: {
+    fontSize: 12,
     color: Colors.textSecondary,
-    fontWeight: "600",
   },
 });

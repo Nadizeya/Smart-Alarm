@@ -4,13 +4,13 @@ import { useAlarms } from "@/hooks/useAlarms";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 export default function AlarmsScreen() {
@@ -75,9 +75,9 @@ export default function AlarmsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>My Alarms</Text>
-        <TouchableOpacity style={styles.testButton} onPress={handleTestRinging}>
+        {/* <TouchableOpacity style={styles.testButton} onPress={handleTestRinging}>
           <Text style={styles.testButtonText}>Test 🔔</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {alarms.length === 0 ? (
